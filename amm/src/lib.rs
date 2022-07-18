@@ -1,7 +1,7 @@
 use std::ops::{Add, Div, Mul};
 
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_sdk::{AccountId, assert_one_yocto, assert_self, Balance, env, ext_contract, Gas, is_promise_success, log, near_bindgen, Promise, PromiseResult, require};
+use near_sdk::{AccountId, assert_one_yocto, assert_self, Balance, env, ext_contract, Gas, is_promise_success, log, near_bindgen, Promise, PromiseResult};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
@@ -11,7 +11,7 @@ pub const CALLBACK_GAS: Gas = Gas(5_000_000_000_000);
 
 const INITIAL_BALANCE: Balance = 100_000_000_000_000_000_000_000_000; // 2.5e23yN, 0.25N
 
-const CODE: &[u8] = include_bytes!("../../sub_contract/res/amm_sub_contract.wasm");
+const CODE: &[u8] = include_bytes!("../../amm_wallet/res/amm_wallet.wasm");
 
 #[ext_contract(ext_ft)]
 pub trait FungibleToken {
