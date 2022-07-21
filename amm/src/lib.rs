@@ -84,7 +84,7 @@ impl Contract {
         self.b.addr = b_account_id.clone();
         let p_set_a_meta = self.solve_token_metadata(a_account_id.clone());
         let p_set_b_meta = self.solve_token_metadata(b_account_id.clone());
-        let p_create_wallet = self.create_wallet(a_account_id.clone(), b_account_id.clone());
+        let p_create_wallet = self.create_wallet(a_account_id, b_account_id);
         p_set_a_meta.and(p_set_b_meta).and(p_create_wallet).then(
             Self::ext(env::current_account_id())
                 .with_unused_gas_weight(1)
@@ -98,7 +98,7 @@ impl Contract {
             Self::ext(env::current_account_id())
                 // .with_static_gas(CALLBACK_GAS)
                 .with_unused_gas_weight(1)
-                .solve_token_metadata_callback(addr.clone()),
+                .solve_token_metadata_callback(addr),
         )
     }
     #[private]
@@ -110,13 +110,12 @@ impl Contract {
             PromiseResult::Successful(result) => {
                 near_sdk::serde_json::from_slice::<FungibleTokenMetadata>(&result)
                     .unwrap()
-                    .into()
             }
         };
         log!(
             "got metadata of {}: {}",
             addr,
-            near_sdk::serde_json::to_string(&meta.clone()).unwrap()
+            near_sdk::serde_json::to_string(&meta).unwrap()
         );
         if addr == self.a.addr {
             self.a.meta = Option::from(meta)
@@ -141,7 +140,7 @@ impl Contract {
         p_create_account.then(p_deploy_code).then(
             Self::ext(env::current_account_id())
                 .with_unused_gas_weight(1)
-                .create_wallet_callback(wallet_account_id.clone()),
+                .create_wallet_callback(wallet_account_id),
         )
     }
     #[private]
@@ -171,7 +170,7 @@ impl Contract {
             .with_attached_deposit(1)
             .caller_transfer(
                 self.wallet.clone(),
-                qty.into(),
+                qty,
                 Some("deposit from amm contract".to_string()),
             )
             .then(Self::ext(env::current_account_id()).deposit_a_callback(qty))
@@ -195,7 +194,7 @@ impl Contract {
             .with_attached_deposit(1)
             .caller_transfer(
                 self.wallet.clone(),
-                qty.into(),
+                qty,
                 Some("deposit from amm contract".to_string()),
             )
             .then(
@@ -223,7 +222,7 @@ impl Contract {
             .with_unused_gas_weight(1)
             .signer_transfer(
                 self.wallet.clone(),
-                qty.into(),
+                qty,
                 Some("swap from amm contract".to_string()),
             );
         // try to send b_diff b from wallet to user
@@ -232,7 +231,7 @@ impl Contract {
             .with_unused_gas_weight(1)
             .withdraw_b(
                 env::signer_account_id(),
-                b_diff.into(),
+                b_diff,
             );
         // try to update balance
         p_send_a
@@ -263,7 +262,7 @@ impl Contract {
             .with_unused_gas_weight(1)
             .signer_transfer(
                 self.wallet.clone(),
-                qty.into(),
+                qty,
                 Some("swap from amm contract".to_string()),
             );
         // try to send b_diff b from wallet to user
@@ -272,7 +271,7 @@ impl Contract {
             .with_unused_gas_weight(1)
             .withdraw_a(
                 env::signer_account_id(),
-                a_diff.into(),
+                a_diff,
             );
         p_send_b
             .then(p_receive_a)

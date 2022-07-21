@@ -41,7 +41,7 @@ impl SubContract {
             .with_attached_deposit(1)
             .caller_transfer(
                 account_id,
-                qty.into(),
+                qty,
                 Some("withdraw from amm sub contract".to_string()),
             )
     }
@@ -53,7 +53,7 @@ impl SubContract {
             .with_attached_deposit(1)
             .caller_transfer(
                 account_id,
-                qty.into(),
+                qty,
                 Some("withdraw from amm sub contract".to_string()),
             )
     }

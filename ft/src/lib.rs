@@ -91,7 +91,7 @@ impl Contract {
         if !self.token.accounts.contains_key(&account_id) {
             self.token.internal_register_account(&account_id);
         }
-        self.token.internal_deposit(&account_id, balance.into())
+        self.token.internal_deposit(&account_id, balance)
     }
 
     #[payable]
@@ -113,7 +113,7 @@ impl Contract {
         }
         assert_one_yocto();
         let sender_id = env::signer_account_id();
-        let balance: Balance = balance.into();
+        let balance: Balance = balance;
         self.token.internal_transfer(&sender_id, &account_id, balance, memo);
     }
 }
@@ -131,7 +131,7 @@ impl FungibleTokenMetadataProvider for Contract {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use near_sdk::{Balance, testing_env};
-    use near_sdk::MockedBlockchain;
+    
     use near_sdk::test_utils::{accounts, VMContextBuilder};
 
     use super::*;
@@ -151,7 +151,7 @@ mod tests {
     fn test_new() {
         let mut context = get_context(accounts(1));
         testing_env!(context.build());
-        let contract = Contract::new_default_meta(accounts(1).into(), TOTAL_SUPPLY.into());
+        let contract = Contract::new_default_meta(accounts(1), TOTAL_SUPPLY.into());
         testing_env!(context.is_view(true).build());
         assert_eq!(contract.ft_total_supply().0, TOTAL_SUPPLY);
         assert_eq!(contract.ft_balance_of(accounts(1)).0, TOTAL_SUPPLY);
@@ -169,7 +169,7 @@ mod tests {
     fn test_transfer() {
         let mut context = get_context(accounts(2));
         testing_env!(context.build());
-        let mut contract = Contract::new_default_meta(accounts(2).into(), TOTAL_SUPPLY.into());
+        let mut contract = Contract::new_default_meta(accounts(2), TOTAL_SUPPLY.into());
         testing_env!(context
             .storage_usage(env::storage_usage())
             .attached_deposit(contract.storage_balance_bounds().min.into())
