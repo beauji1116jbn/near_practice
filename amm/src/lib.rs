@@ -96,6 +96,9 @@ impl Contract {
     fn assert_initialized(&mut self) {
         assert!(self.initialized, "contract is not initialized yet")
     }
+    fn assert_deposited(&mut self){
+        assert!(self.a.qty * self.b.qty > 0, "must deposit for both tokens before swap")
+    }
     pub fn init(&mut self, a: String, b: String) -> Promise {
         log!("start init, a: {}, b: {}", a, b);
         let a_account_id = AccountId::try_from(a).unwrap();
@@ -232,6 +235,7 @@ impl Contract {
     #[payable]
     pub fn swap_a(&mut self, qty: U128) -> Promise {
         self.assert_initialized();
+        self.assert_deposited();
         assert!(qty > U128(0), "input quantity must be positive");
 
         let b_diff = get_des_diff_from_src_qty(self.a.qty, qty.into(), self.b.qty);
@@ -273,6 +277,7 @@ impl Contract {
     #[payable]
     pub fn swap_b(&mut self, qty: U128) -> Promise {
         self.assert_initialized();
+        self.assert_deposited();
         assert!(qty > U128(0), "input quantity must be positive");
 
         let a_diff = get_des_diff_from_src_qty(self.b.qty, qty.into(), self.a.qty);

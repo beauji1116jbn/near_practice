@@ -1,4 +1,4 @@
-All: deploy
+All:
 
 .PHONY: build lint
 
