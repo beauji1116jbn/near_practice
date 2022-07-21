@@ -19,7 +19,7 @@ use near_contract_standards::fungible_token::FungibleToken;
 use near_contract_standards::fungible_token::metadata::{
     FT_METADATA_SPEC, FungibleTokenMetadata, FungibleTokenMetadataProvider,
 };
-use near_sdk::{AccountId, assert_one_yocto, Balance, env, log, near_bindgen, PanicOnDefault, PromiseOrValue};
+use near_sdk::{AccountId, Balance, env, log, near_bindgen, PanicOnDefault, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LazyOption;
 use near_sdk::json_types::U128;
@@ -85,36 +85,6 @@ impl Contract {
 
     fn on_tokens_burned(&mut self, account_id: AccountId, amount: Balance) {
         log!("Account @{} burned {}", account_id, amount);
-    }
-
-    pub fn deposit(&mut self, account_id: AccountId, balance: Balance) {
-        if !self.token.accounts.contains_key(&account_id) {
-            self.token.internal_register_account(&account_id);
-        }
-        self.token.internal_deposit(&account_id, balance)
-    }
-
-    #[payable]
-    pub fn caller_transfer(&mut self, account_id: AccountId, balance: Balance, memo: Option<String>) {
-        if !self.token.accounts.contains_key(&account_id) {
-            self.token.internal_register_account(&account_id);
-        }
-        self.token.ft_transfer(account_id, balance.into(), memo)
-    }
-
-    pub fn balance_of(&mut self, account_id: AccountId) -> u128 {
-        self.token.ft_balance_of(account_id).into()
-    }
-
-    #[payable]
-    pub fn signer_transfer(&mut self, account_id: AccountId, balance: Balance, memo: Option<String>) {
-        if !self.token.accounts.contains_key(&account_id) {
-            self.token.internal_register_account(&account_id);
-        }
-        assert_one_yocto();
-        let sender_id = env::signer_account_id();
-        let balance: Balance = balance;
-        self.token.internal_transfer(&sender_id, &account_id, balance, memo);
     }
 }
 

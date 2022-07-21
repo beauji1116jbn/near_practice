@@ -1,8 +1,12 @@
 use std::ops::{Add, Div, Mul};
 
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
-use near_sdk::{AccountId, assert_one_yocto, assert_self, Balance, env, ext_contract, Gas, is_promise_success, log, near_bindgen, Promise, PromiseResult};
+use near_contract_standards::fungible_token::core::FungibleTokenCore;
+use near_contract_standards::fungible_token::metadata::{FungibleTokenMetadata, FungibleTokenMetadataProvider};
+
+use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
+use near_sdk::{AccountId, assert_one_yocto, assert_self, Balance, env, ext_contract, Gas, is_promise_success, log, near_bindgen, Promise, PromiseOrValue, PromiseResult};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
@@ -14,12 +18,29 @@ const INITIAL_BALANCE: Balance = 100_000_000_000_000_000_000_000_000; // 2.5e23y
 const CODE: &[u8] = include_bytes!("../../amm_wallet/res/amm_wallet.wasm");
 
 #[ext_contract(ext_ft)]
-pub trait FungibleToken {
+pub trait FungibleToken<T = Self>
+    where
+        T: FungibleTokenCore
+        + FungibleTokenMetadataProvider
+        + FungibleTokenResolver
+{
+    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
+    fn ft_transfer_call(
+        &mut self,
+        receiver_id: AccountId,
+        amount: U128,
+        memo: Option<String>,
+        msg: String,
+    ) -> PromiseOrValue<U128>;
+    fn ft_total_supply(&self) -> U128;
+    fn ft_balance_of(&self, account_id: AccountId) -> U128;
     fn ft_metadata(&self) -> FungibleTokenMetadata;
-
-    fn caller_transfer(&mut self, account_id: AccountId, balance: Balance, memo: Option<String>);
-
-    fn signer_transfer(&mut self, account_id: AccountId, balance: Balance, memo: Option<String>);
+    fn ft_resolve_transfer(
+        &mut self,
+        sender_id: AccountId,
+        receiver_id: AccountId,
+        amount: U128,
+    ) -> U128;
 }
 
 #[ext_contract(ext_sub)]
@@ -159,16 +180,16 @@ impl Contract {
     }
 
     #[payable]
-    pub fn deposit_a(&mut self, qty: u128) -> Promise {
+    pub fn deposit_a(&mut self, qty: U128) -> Promise {
         self.assert_initialized();
         // 1. assert self
         assert_self();
         assert_one_yocto();
         // 2. validate input
-        assert!(qty > 0, "At least one quantity of a and b must be positive");
+        assert!(qty > U128(0), "At least one quantity of a and b must be positive");
         ext_ft::ext(self.a.addr.clone())
             .with_attached_deposit(1)
-            .caller_transfer(
+            .ft_transfer(
                 self.wallet.clone(),
                 qty,
                 Some("deposit from amm contract".to_string()),
@@ -177,22 +198,22 @@ impl Contract {
     }
 
     #[private]
-    pub fn deposit_a_callback(&mut self, qty: u128) {
+    pub fn deposit_a_callback(&mut self, qty: U128) {
         assert!(is_promise_success(), "failed to transfer");
-        self.a.qty += qty
+        self.a.qty += Balance::from(qty)
     }
 
     #[payable]
-    pub fn deposit_b(&mut self, qty: u128) -> Promise {
+    pub fn deposit_b(&mut self, qty: U128) -> Promise {
         self.assert_initialized();
         // 1. assert self
         assert_self();
         assert_one_yocto();
         // 2. validate input
-        assert!(qty > 0, "At least one quantity of a and b must be positive");
+        assert!(qty > U128(0), "At least one quantity of a and b must be positive");
         ext_ft::ext(self.b.addr.clone())
             .with_attached_deposit(1)
-            .caller_transfer(
+            .ft_transfer(
                 self.wallet.clone(),
                 qty,
                 Some("deposit from amm contract".to_string()),
@@ -203,27 +224,27 @@ impl Contract {
     }
 
     #[private]
-    pub fn deposit_b_callback(&mut self, qty: u128) {
+    pub fn deposit_b_callback(&mut self, qty: U128) {
         assert!(is_promise_success(), "failed to transfer");
-        self.b.qty += qty
+        self.b.qty += Balance::from(qty)
     }
 
     #[payable]
-    pub fn swap_a(&mut self, qty: u128) -> Promise {
+    pub fn swap_a(&mut self, qty: U128) -> Promise {
         self.assert_initialized();
-        assert!(qty > 0, "input quantity must be positive");
+        assert!(qty > U128(0), "input quantity must be positive");
 
-        let b_diff = get_des_diff_from_src_qty(self.a.qty, qty, self.b.qty);
+        let b_diff = get_des_diff_from_src_qty(self.a.qty, qty.into(), self.b.qty);
         log!("current a qty: {}, b qty: {}, get b diff in swap a: {}",self.a.qty, self.b.qty, b_diff);
 
         // try to send qty a from user to wallet
         let p_send_a = ext_ft::ext(self.a.addr.clone())
             .with_attached_deposit(1)
             .with_unused_gas_weight(1)
-            .signer_transfer(
+            .ft_resolve_transfer(
+                env::predecessor_account_id(),
                 self.wallet.clone(),
                 qty,
-                Some("swap from amm contract".to_string()),
             );
         // try to send b_diff b from wallet to user
         let p_receive_b = ext_sub::ext(self.wallet.clone())
@@ -239,31 +260,31 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_unused_gas_weight(1)
-                    .swap_a_callback(qty, b_diff))
+                    .swap_a_callback(qty, b_diff.into()))
     }
 
     #[private]
-    pub fn swap_a_callback(&mut self, qty: u128, diff: u128) {
+    pub fn swap_a_callback(&mut self, qty: U128, diff: U128) {
         log!("swap callback promise result count: {}", env::promise_results_count() );
-        self.a.qty += qty;
-        self.b.qty -= diff;
+        self.a.qty += Balance::from(qty);
+        self.b.qty -= Balance::from(diff);
     }
 
     #[payable]
-    pub fn swap_b(&mut self, qty: u128) -> Promise {
+    pub fn swap_b(&mut self, qty: U128) -> Promise {
         self.assert_initialized();
-        assert!(qty > 0, "input quantity must be positive");
+        assert!(qty > U128(0), "input quantity must be positive");
 
-        let a_diff = get_des_diff_from_src_qty(self.b.qty, qty, self.a.qty);
+        let a_diff = get_des_diff_from_src_qty(self.b.qty, qty.into(), self.a.qty);
         log!("current a qty: {}, b qty: {}, get a diff in swap b: {}",self.a.qty, self.b.qty, a_diff);
         // try to send qty a from user to wallet
         let p_send_b = ext_ft::ext(self.b.addr.clone())
             .with_attached_deposit(1)
             .with_unused_gas_weight(1)
-            .signer_transfer(
+            .ft_resolve_transfer(
+                env::predecessor_account_id(),
                 self.wallet.clone(),
                 qty,
-                Some("swap from amm contract".to_string()),
             );
         // try to send b_diff b from wallet to user
         let p_receive_a = ext_sub::ext(self.wallet.clone())
@@ -278,20 +299,20 @@ impl Contract {
             .then(
                 Self::ext(env::current_account_id())
                     .with_unused_gas_weight(1)
-                    .swap_b_callback(qty, a_diff))
+                    .swap_b_callback(qty, a_diff.into()))
     }
 
     #[private]
-    pub fn swap_b_callback(&mut self, qty: u128, diff: u128) {
+    pub fn swap_b_callback(&mut self, qty: U128, diff: U128) {
         log!("swap callback promise result count: {}", env::promise_results_count() );
-        self.b.qty += qty;
-        self.a.qty -= diff;
+        self.b.qty += Balance::from(qty);
+        self.a.qty -= Balance::from(diff);
     }
 }
 
 // des_qty = des_balance - src_balance * des_balance / (src_balance + src_qty)
 //         = des_balance * src_qty / (src_balance + src_qty)
-fn get_des_diff_from_src_qty(src_balance: u128, src_qty: u128, des_balance: u128) -> u128 {
+fn get_des_diff_from_src_qty(src_balance: Balance, src_qty: Balance, des_balance: Balance) -> Balance {
     let src_diff_dec = Decimal::from(src_qty);
     let src_qty_dec = Decimal::from(src_balance);
     let des_qty_dec = Decimal::from(des_balance);
