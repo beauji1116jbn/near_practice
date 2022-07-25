@@ -1,9 +1,11 @@
 use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
-use near_sdk::{AccountId, Balance, env, ext_contract, Gas, log, near_bindgen, PanicOnDefault, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::{
+    env, ext_contract, log, near_bindgen, AccountId, Balance, Gas, PanicOnDefault, PromiseOrValue,
+};
 
 pub const CALLBACK_GAS: Gas = Gas(5_000_000_000_000);
 
@@ -32,7 +34,12 @@ pub struct AmmWallet {
 #[near_bindgen]
 impl AmmWallet {
     #[init]
-    pub fn init(a: AccountId, a_meta: FungibleTokenMetadata, b: AccountId, b_meta: FungibleTokenMetadata) -> Self {
+    pub fn init(
+        a: AccountId,
+        a_meta: FungibleTokenMetadata,
+        b: AccountId,
+        b_meta: FungibleTokenMetadata,
+    ) -> Self {
         assert!(!env::state_exists(), "Already initialized");
         Self {
             a,
@@ -64,8 +71,18 @@ impl AmmWallet {
 
 #[near_bindgen]
 impl FungibleTokenReceiver for AmmWallet {
-    fn ft_on_transfer(&mut self, sender_id: AccountId, amount: U128, msg: String) -> PromiseOrValue<U128> {
-        log!("ft_on_transfer called on AmmWallet, sender_id: {}, amount: {}, msg: {}", sender_id, amount.0, msg);
+    fn ft_on_transfer(
+        &mut self,
+        sender_id: AccountId,
+        amount: U128,
+        msg: String,
+    ) -> PromiseOrValue<U128> {
+        log!(
+            "ft_on_transfer called on AmmWallet, sender_id: {}, amount: {}, msg: {}",
+            sender_id,
+            amount.0,
+            msg
+        );
         if env::predecessor_account_id() == self.a {
             log!("called by a");
             self.a_balance += Balance::from(amount);
@@ -80,9 +97,11 @@ impl FungibleTokenReceiver for AmmWallet {
                             sender_id,
                             b_diff.into(),
                             Some("deposit b back to user".to_string()),
-                        ).then(
-                        Self::ext(env::current_account_id())
-                            .on_transfer_b_back(b_diff.into())).into();
+                        )
+                        .then(
+                            Self::ext(env::current_account_id()).on_transfer_b_back(b_diff.into()),
+                        )
+                        .into();
                 }
             } else {
                 log!("receive from owner, update k");
@@ -103,9 +122,11 @@ impl FungibleTokenReceiver for AmmWallet {
                             sender_id,
                             a_diff.into(),
                             Some("deposit a back to user".to_string()),
-                        ).then(
-                        Self::ext(env::current_account_id())
-                            .on_transfer_a_back(a_diff.into())).into();
+                        )
+                        .then(
+                            Self::ext(env::current_account_id()).on_transfer_a_back(a_diff.into()),
+                        )
+                        .into();
                 }
             } else {
                 log!("receive from owner, update k");
